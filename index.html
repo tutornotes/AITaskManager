@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0b0f14"/>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="./config.js"></script>
+<style>
+:root {
+  --bg:#0b0f14; --card:#12171d; --text:#e9eef6; --muted:#aab6c5; --accent:#45a1ff; --border:#26313f;
+  --shadow:0 10px 30px rgba(0,0,0,.4); --radius:16px;
+}
+html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial; }
+.app { max-width:420px; margin:0 auto; min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.card { background:linear-gradient(180deg,#1a212a,#0e1217); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:24px; width:100%; display:grid; gap:16px; text-align:center; }
+.logo { width:56px; height:56px; border-radius:16px; display:grid; place-items:center; margin:0 auto; background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; font-weight:900; font-size:22px; }
+h1 { margin:0; font-size:20px; }
+p { margin:0; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="logo">AI</div>
+      <h1>Task Manager Login</h1>
+      <p>Sign in to access your data</p>
+      <div id="googleSignIn"></div>
+    </div>
+  </div>
+
+<script>
+const CLIENT_ID = window.APP_CONFIG.GOOGLE_CLIENT_ID;
+function handleCredential(response){
+  localStorage.setItem('idToken', response.credential);
+  window.location.href = './home.html';
+}
+function initAuth(){
+  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredential });
+  google.accounts.id.renderButton(document.getElementById('googleSignIn'), { theme: 'outline', size: 'large' });
+}
+document.addEventListener('DOMContentLoaded', initAuth);
+</script>
+</body>
+</html>

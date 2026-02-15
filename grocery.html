@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Grocery Management</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0b0f14"/>
+<script src="./config.js"></script>
+<style>
+:root {
+  --bg:#0b0f14; --card:#12171d; --elevate:#1a212a; --text:#e9eef6; --muted:#aab6c5;
+  --accent:#45a1ff; --urgent:#ff5066; --high:#ffb84d; --medium:#51d07d; --border:#26313f;
+  --ok:#3ddc84; --danger:#ff5a5f; --shadow:0 10px 30px rgba(0,0,0,.4);
+  --radius:16px;
+}
+html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial; }
+.app { max-width:560px; margin:0 auto; min-height:100dvh; display:flex; flex-direction:column; }
+
+.appbar {
+  position:sticky; top:0; z-index:50;
+  background:linear-gradient(180deg,rgba(18,23,29,.95),rgba(18,23,29,.7));
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(10px);
+  padding:14px 16px 12px;
+  display:flex; align-items:center; gap:12px;
+}
+.logo { width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+  background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; font-weight:900; }
+h1 { margin:0; font-size:18px; font-weight:700; }
+.subtitle { margin-left:auto; font-size:12px; color:var(--muted); }
+.right-actions { display:flex; gap:8px; align-items:center; }
+.icon-btn {
+  width:36px; height:36px; border:1px solid var(--border); background:#121821;
+  border-radius:10px; display:grid; place-items:center; font-weight:900; color:var(--text); cursor:pointer;
+}
+.auth-btn { border:1px solid var(--border); background:#121821; color:var(--text); border-radius:10px; padding:8px 10px; font-size:12px; cursor:pointer; }
+
+.content { flex:1; padding:16px; display:flex; flex-direction:column; gap:16px; }
+.card { background:linear-gradient(180deg,#1a212a,#0e1217); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+.list-card { padding:12px; display:grid; gap:12px; }
+
+.item { display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:center;
+  border:1px solid var(--border); background:linear-gradient(180deg,#121820,#0f141a);
+  border-radius:12px; padding:12px; }
+.item.checked { border-color:rgba(61,220,132,0.6); background:linear-gradient(180deg,#13241d,#0f141a); text-decoration:line-through; }
+.item .title { font-size:14px; font-weight:700; word-break:break-word; }
+.item .meta { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.badge { font-size:11px; border:1px solid var(--border); padding:4px 8px; border-radius:999px; background:#182028; }
+.badge.medium { background:linear-gradient(135deg,var(--medium),#a4f0c5); color:#0f2016; border:none; }
+
+.btn { appearance:none; border:0; border-radius:12px; padding:12px 14px; font-weight:700;
+  background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; cursor:pointer; }
+
+input[type=number], textarea {
+  width:100%; background:#1c2530; border:1px solid var(--border);
+  border-radius:10px; padding:12px; color:var(--text); outline:none;
+}
+textarea { resize:vertical; min-height:140px; max-height:300px; }
+label { font-size:12px; color:var(--muted); }
+
+.ai-card { border:1px solid var(--border); border-radius:12px; padding:12px;
+  background:linear-gradient(180deg,#15202a,#0f141a); font-size:12px; color:var(--muted); display:grid; gap:8px; }
+
+.fab { position:fixed; left:20px; bottom:20px; width:56px; height:56px; border-radius:50%;
+  border:0; background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a;
+  font-weight:900; font-size:22px; display:grid; place-items:center;
+  box-shadow:0 10px 24px rgba(69,161,255,.35); cursor:pointer; z-index:200; }
+
+.modal-wrap { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; z-index:300; }
+.modal-wrap.open { display:flex; }
+.modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); }
+.modal { position:relative; width:100%; max-width:560px; background:linear-gradient(180deg,#1a212a,#0e1217);
+  border:1px solid var(--border); border-bottom:0; border-top-left-radius:16px; border-top-right-radius:16px;
+  box-shadow:0 -10px 30px rgba(0,0,0,.45); max-height:92dvh; overflow:auto; }
+.modal-header { padding:14px 16px 8px; border-bottom:1px solid var(--border); }
+.modal-title { margin:0; font-size:16px; font-weight:800; }
+.modal-body { padding:14px 16px; display:grid; gap:12px; }
+.modal-actions { padding:12px 16px 16px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border); }
+.btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="appbar">
+      <div class="logo">AI</div>
+      <h1>Grocery Management</h1>
+      <div class="subtitle" id="statusText">Ready</div>
+      <div class="right-actions">
+        <button class="icon-btn" id="refreshBtn">⟲</button>
+        <button class="auth-btn" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <section class="card list-card">
+        <div>
+          <label>Notepad Grocery Input</label>
+          <textarea id="groceryNotepad"></textarea>
+        </div>
+        <button class="btn" id="addListBtn">Add List</button>
+      </section>
+
+      <section class="card list-card">
+        <div id="items"></div>
+        <div>
+          <label>Enter Final Bill Amount (₹)</label>
+          <input type="number" id="finalAmount" step="0.01">
+        </div>
+        <button class="btn" id="analyzeBtn">Analyze Spending</button>
+      </section>
+
+      <section class="card list-card" id="analysisCard" style="display:none;">
+        <div class="ai-card">
+          <div><strong>Estimated Total:</strong> <span id="estTotal">—</span></div>
+          <div><strong>Difference:</strong> <span id="diffTotal">—</span></div>
+          <div><strong>Suggested Items to Remove:</strong> <span id="avoidItems">—</span></div>
+          <div><strong>Budget Tips:</strong> <span id="budgetTips">—</span></div>
+          <div><strong>Summary:</strong> <span id="summaryText">—</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <button class="fab" id="fabMenu">≡</button>
+
+  <!-- Options Modal -->
+  <div class="modal-wrap" id="modalOptions">
+    <div class="modal-overlay" data-close="modalOptions"></div>
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Options</h3></div>
+      <div class="modal-body">
+        <button class="btn" id="optionTasksBtn">Task Manager</button>
+        <button class="btn" id="optionBillsBtn">Bill Management</button>
+        <button class="btn" id="optionGroceryBtn">Grocery Management</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close="modalOptions">Close</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const WEB_APP_URL = window.APP_CONFIG.WEB_APP_URL;
+let idToken = localStorage.getItem('idToken') || '';
+if(!idToken) window.location.href = './index.html';
+
+const groceryPrices = {
+  "Rice 1kg": 55,
+  "Wheat Flour 1kg": 48,
+  "Toor Dal 1kg": 135,
+  "Moong Dal 1kg": 120,
+  "Chana Dal 1kg": 85,
+  "Poha 1kg": 60,
+  "Milk 1L": 54,
+  "Butter 100g": 58,
+  "Bread": 40,
+  "Eggs 12": 72,
+  "Cornflakes 500g": 180,
+  "Sunflower Oil 1L": 130,
+  "Sugar 1kg": 45,
+  "Salt 1kg": 22,
+  "Turmeric 100g": 30,
+  "Chilli Powder 100g": 35,
+  "Biscuits": 30,
+  "Chips": 20,
+  "Maggi": 14,
+  "Soft Drink 2L": 95,
+  "Chocolate": 40
+};
+const nonEssential = ["Chips","Soft Drink 2L","Chocolate","Biscuits"];
+
+const qs=s=>document.querySelector(s);
+let ITEMS = [];
+
+function safeFetch(body){ return fetch(WEB_APP_URL,{ method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(body) }); }
+function ensureJson(r){ return r.json().catch(()=>({ok:false,error:'Bad JSON'})); }
+
+async function apiRequest(action,payload={}){
+  const r=await safeFetch({action,idToken,...payload});
+  return ensureJson(r);
+}
+
+function parseLines(text){
+  return text.split('\n').map(l=>l.trim()).filter(Boolean).map(line=>{
+    const match=line.match(/^(.*?)(\d+(\.\d+)?\s*[a-zA-Z].*)$/);
+    if(match){ return { raw: line, name: match[1].trim(), quantity: match[2].trim() }; }
+    return { raw: line, name: line, quantity: '' };
+  });
+}
+function normalize(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+function parseQty(text){
+  const unitMatch = text.match(/(\d+(\.\d+)?)\s*(kg|g|l|ml|pack|packet|pcs|pc|bar)/i);
+  if(unitMatch){ return { qty: parseFloat(unitMatch[1]), unit: unitMatch[3].toLowerCase() }; }
+  const countMatch = text.match(/\b(\d+)\b/);
+  if(countMatch){ return { qty: parseFloat(countMatch[1]), unit: 'count' }; }
+  return { qty: 1, unit: '' };
+}
+function getBaseInfo(key){
+  const unitMatch = key.match(/(\d+(\.\d+)?)\s*(kg|g|l|ml|pack|packet|pcs|pc|bar)/i);
+  if(unitMatch){
+    const baseName = key.replace(unitMatch[0], '').trim();
+    return { baseName, baseQty: parseFloat(unitMatch[1]), baseUnit: unitMatch[3].toLowerCase() };
+  }
+  const countMatch = key.match(/\b(\d+)\b/);
+  if(countMatch){
+    const baseName = key.replace(countMatch[0], '').trim();
+    return { baseName, baseQty: parseFloat(countMatch[1]), baseUnit: 'count' };
+  }
+  return { baseName: key, baseQty: 1, baseUnit: '' };
+}
+function convertMultiplier(lineQty, lineUnit, baseQty, baseUnit){
+  if(!lineQty || lineQty<=0) return 1;
+  if(!baseUnit) return lineQty / baseQty;
+  const unitMap = { kg:{g:1000}, l:{ml:1000} };
+  if(lineUnit===baseUnit){ return lineQty / baseQty; }
+  if(unitMap[baseUnit] && unitMap[baseUnit][lineUnit]){
+    const converted=lineQty / unitMap[baseUnit][lineUnit];
+    return converted / baseQty;
+  }
+  if(unitMap[lineUnit] && unitMap[lineUnit][baseUnit]){
+    const converted=lineQty * unitMap[lineUnit][baseUnit];
+    return converted / baseQty;
+  }
+  return 1;
+}
+function matchPrice(line){
+  const normLine = normalize(line);
+  for(const key of Object.keys(groceryPrices)){
+    const { baseName, baseQty, baseUnit } = getBaseInfo(key);
+    if(normLine.includes(normalize(baseName))){
+      const { qty, unit } = parseQty(line);
+      const multiplier = convertMultiplier(qty, unit, baseQty, baseUnit);
+      return { key, price: groceryPrices[key] * multiplier };
+    }
+  }
+  return { key: '', price: 0 };
+}
+
+function renderItems(){
+  const list=qs('#items');
+  list.innerHTML='';
+  for(const item of ITEMS){
+    const wrap=document.createElement('label');
+    wrap.className='item'+(item.checked?' checked':'');
+    const cb=document.createElement('input');
+    cb.type='checkbox';
+    cb.checked=!!item.checked;
+    cb.addEventListener('change',()=>{ item.checked=cb.checked; renderItems(); });
+    const main=document.createElement('div');
+    const title=document.createElement('div'); title.className='title'; title.textContent=item.name;
+    const meta=document.createElement('div'); meta.className='meta';
+    if(item.quantity){
+      const badge=document.createElement('span'); badge.className='badge medium'; badge.textContent=item.quantity;
+      meta.appendChild(badge);
+    }
+    main.appendChild(title); main.appendChild(meta);
+    wrap.appendChild(cb); wrap.appendChild(main);
+    list.appendChild(wrap);
+  }
+}
+
+function addList(){
+  const text=qs('#groceryNotepad').value;
+  ITEMS=parseLines(text).map(i=>({ ...i, checked:false }));
+  renderItems();
+}
+
+function analyzeLocal(){
+  let estimatedTotal = 0;
+  const avoidItems = [];
+  const tips = [];
+
+  ITEMS.forEach(i=>{
+    const { key, price } = matchPrice(i.raw);
+    estimatedTotal += price;
+    if(key && nonEssential.some(n=>normalize(n)===normalize(key))){
+      avoidItems.push(i.raw);
+    }
+  });
+
+  estimatedTotal = Number(estimatedTotal.toFixed(2));
+  const finalAmount = Number(qs('#finalAmount').value.trim());
+  const difference = Number((finalAmount - estimatedTotal).toFixed(2));
+
+  if(difference > 0){
+    tips.push(`You spent ₹${difference} extra. Review snacks and extras.`);
+  }else{
+    tips.push(`Good saving! ₹${Math.abs(difference)} under expected budget.`);
+  }
+  if(avoidItems.length >= 3){
+    tips.push('Consider reducing snacks to save ₹100–₹300 per visit.');
+  }
+
+  return {
+    estimatedTotal,
+    difference,
+    avoidItems,
+    tips,
+    summary: `Estimated ₹${estimatedTotal}, Actual ₹${finalAmount}, Difference ₹${difference}.`
+  };
+}
+
+async function saveAnalysis(result){
+  const payload = {
+    action: 'saveGroceryAnalysis',
+    items: ITEMS,
+    finalAmount: Number(qs('#finalAmount').value.trim()),
+    estimatedTotal: result.estimatedTotal,
+    difference: result.difference,
+    avoidItems: result.avoidItems,
+    tips: result.tips,
+    summary: result.summary
+  };
+  await apiRequest('saveGroceryAnalysis', payload);
+}
+
+async function analyzeSpending(){
+  if(!ITEMS.length){ alert('Please add list first.'); return; }
+  if(!qs('#finalAmount').value.trim()){ alert('Enter final bill amount.'); return; }
+
+  const result = analyzeLocal();
+  qs('#analysisCard').style.display='block';
+  qs('#estTotal').textContent=result.estimatedTotal;
+  qs('#diffTotal').textContent=result.difference;
+  qs('#avoidItems').textContent=result.avoidItems.length?result.avoidItems.join(', '):'None';
+  qs('#budgetTips').textContent=result.tips.join(' | ');
+  qs('#summaryText').textContent=result.summary;
+
+  await saveAnalysis(result);
+}
+
+function openModal(id){ const w=qs('#'+id); if(!w) return; w.classList.add('open'); }
+function closeModal(id){ const w=qs('#'+id); if(!w) return; w.classList.remove('open'); }
+
+function init(){
+  qs('#addListBtn').addEventListener('click',addList);
+  qs('#analyzeBtn').addEventListener('click',analyzeSpending);
+  qs('#refreshBtn').addEventListener('click',()=>{ qs('#groceryNotepad').value=''; qs('#finalAmount').value=''; ITEMS=[]; renderItems(); });
+
+  qs('#fabMenu').addEventListener('click',()=>openModal('modalOptions'));
+  qs('#optionTasksBtn').addEventListener('click',()=>window.location.href='./home.html');
+  qs('#optionBillsBtn').addEventListener('click',()=>window.location.href='./bills.html');
+  qs('#optionGroceryBtn').addEventListener('click',()=>window.location.href='./grocery.html');
+
+  document.querySelectorAll('[data-close]').forEach(el=>{
+    el.addEventListener('click',()=>closeModal(el.getAttribute('data-close')));
+  });
+
+  qs('#logoutBtn').addEventListener('click',()=>{
+    localStorage.removeItem('idToken');
+    window.location.href = './index.html';
+  });
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>

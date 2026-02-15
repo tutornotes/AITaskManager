@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Bill Management</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0b0f14"/>
+<script src="./config.js"></script>
+<style>
+:root {
+  --bg:#0b0f14; --card:#12171d; --elevate:#1a212a; --text:#e9eef6; --muted:#aab6c5;
+  --accent:#45a1ff; --urgent:#ff5066; --medium:#51d07d; --border:#26313f;
+  --shadow:0 10px 30px rgba(0,0,0,.4); --radius:16px;
+}
+html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial; }
+.app { max-width:560px; margin:0 auto; min-height:100dvh; display:flex; flex-direction:column; }
+.appbar {
+  position:sticky; top:0; z-index:50;
+  background:linear-gradient(180deg,rgba(18,23,29,.95),rgba(18,23,29,.7));
+  border-bottom:1px solid var(--border); backdrop-filter:blur(10px);
+  padding:14px 16px 12px; display:flex; align-items:center; gap:12px;
+}
+.logo { width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+  background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; font-weight:900; }
+h1 { margin:0; font-size:18px; font-weight:700; }
+.subtitle { margin-left:auto; font-size:12px; color:var(--muted); }
+.right-actions { display:flex; gap:8px; align-items:center; }
+.icon-btn {
+  width:36px; height:36px; border:1px solid var(--border); background:#121821;
+  border-radius:10px; display:grid; place-items:center; font-weight:900; color:var(--text); cursor:pointer;
+}
+.auth-btn { border:1px solid var(--border); background:#121821; color:var(--text); border-radius:10px; padding:8px 10px; font-size:12px; cursor:pointer; }
+
+.content { flex:1; padding:16px; display:flex; flex-direction:column; gap:16px; }
+.card { background:linear-gradient(180deg,#1a212a,#0e1217); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+.list-card { padding:8px; display:grid; gap:8px; }
+.loading, .empty { text-align:center; color:var(--muted); padding:24px 8px; font-size:14px; }
+
+.bill {
+  display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center;
+  border:1px solid var(--border); background:linear-gradient(180deg,#121820,#0f141a);
+  border-radius:12px; padding:12px;
+}
+.bill .title { font-size:14px; font-weight:700; }
+.bill .meta { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.badge { font-size:11px; border:1px solid var(--border); padding:4px 8px; border-radius:999px; background:#182028; }
+.badge.medium { background:linear-gradient(135deg,var(--medium),#a4f0c5); color:#0f2016; border:none; }
+.badge.urgent { background:linear-gradient(135deg,var(--urgent),#ff7a8a); color:#fff; border:none; }
+
+.fab {
+  position:fixed; right:20px; bottom:20px; width:56px; height:56px; border-radius:50%;
+  border:0; background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a;
+  font-weight:900; font-size:22px; display:grid; place-items:center;
+  box-shadow:0 10px 24px rgba(69,161,255,.35); cursor:pointer; z-index:200;
+}
+.fab-alt { right:auto; left:20px; }
+
+.modal-wrap { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; z-index:300; }
+.modal-wrap.open { display:flex; }
+.modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); }
+.modal {
+  position:relative; width:100%; max-width:560px; background:linear-gradient(180deg,#1a212a,#0e1217);
+  border:1px solid var(--border); border-bottom:0; border-top-left-radius:16px; border-top-right-radius:16px;
+  box-shadow:0 -10px 30px rgba(0,0,0,.45); max-height:92dvh; overflow:auto;
+}
+.modal-header { padding:14px 16px 8px; border-bottom:1px solid var(--border); }
+.modal-title { margin:0; font-size:16px; font-weight:800; }
+.modal-body { padding:14px 16px; display:grid; gap:12px; }
+.modal-actions { padding:12px 16px 16px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border); }
+.btn { appearance:none; border:0; border-radius:12px; padding:12px 14px; font-weight:700; background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; cursor:pointer; }
+.btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+.btn.danger { background:linear-gradient(135deg,var(--danger),#ff8a8e); color:#330c0d; }
+input[type=text], input[type=number], input[type=date] {
+  width:100%; background:#1c2530; border:1px solid var(--border);
+  border-radius:10px; padding:12px; color:var(--text); outline:none;
+}
+label { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="appbar">
+      <div class="logo">AI</div>
+      <h1>Bill Management</h1>
+      <div class="subtitle" id="statusText">Loading…</div>
+      <div class="right-actions">
+        <button class="icon-btn" id="refreshBtn">↻</button>
+        <button class="auth-btn" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <section class="card list-card">
+        <div class="loading" id="loadingBills">Loading bills…</div>
+        <div class="empty" id="emptyBills" style="display:none;">No bills yet.</div>
+        <div id="bills"></div>
+      </section>
+    </div>
+  </div>
+
+  <button class="fab fab-alt" id="fabMenu">≡</button>
+  <button class="fab" id="fabAdd">＋</button>
+
+  <!-- Add Bill Modal -->
+  <div class="modal-wrap" id="modalAddBill">
+    <div class="modal-overlay" data-close="modalAddBill"></div>
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Add Bill</h3></div>
+      <div class="modal-body">
+        <div><label>Name</label><input id="addName" type="text"></div>
+        <div><label>Category</label><input id="addCategory" type="text"></div>
+        <div><label>Amount</label><input id="addAmount" type="number"></div>
+        <div><label>Due Date</label><input id="addDue" type="date"></div>
+        <div><label>Status</label><input id="addStatus" type="text" placeholder="Paid / Unpaid"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close="modalAddBill">Cancel</button>
+        <button class="btn" id="addBillBtn">Add Bill</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Bill Modal -->
+  <div class="modal-wrap" id="modalEditBill">
+    <div class="modal-overlay" data-close="modalEditBill"></div>
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Edit Bill</h3></div>
+      <div class="modal-body">
+        <div><label>Name</label><input id="editName" type="text"></div>
+        <div><label>Category</label><input id="editCategory" type="text"></div>
+        <div><label>Amount</label><input id="editAmount" type="number"></div>
+        <div><label>Due Date</label><input id="editDue" type="date"></div>
+        <div><label>Status</label><input id="editStatus" type="text"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close="modalEditBill">Cancel</button>
+        <button class="btn" id="saveBillBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Bill Modal -->
+  <div class="modal-wrap" id="modalDeleteBill">
+    <div class="modal-overlay" data-close="modalDeleteBill"></div>
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Delete Bill</h3></div>
+      <div class="modal-body">
+        <div>Delete this bill?</div>
+        <div id="deleteBillTitle" style="font-weight:800;"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close="modalDeleteBill">Cancel</button>
+        <button class="btn danger" id="deleteBillBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Options Modal -->
+  <div class="modal-wrap" id="modalOptions">
+    <div class="modal-overlay" data-close="modalOptions"></div>
+    <div class="modal">
+      <div class="modal-header"><h3 class="modal-title">Options</h3></div>
+      <div class="modal-body">
+        <button class="btn" id="optionTasksBtn">Task Manager</button>
+        <button class="btn" id="optionBillsBtn">Bill Management</button>
+        <button class="btn" id="optionGroceryBtn">Grocery Management</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close="modalOptions">Close</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const WEB_APP_URL = window.APP_CONFIG.WEB_APP_URL;
+let idToken = localStorage.getItem('idToken') || '';
+if(!idToken) window.location.href = './index.html';
+
+let BILLS = [];
+let EDIT_BILL = null;
+let DELETE_BILL = null;
+
+const qs=s=>document.querySelector(s);
+function safeFetch(body){ return fetch(WEB_APP_URL,{ method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(body) }); }
+function ensureJson(r){ return r.json().catch(()=>({ok:false,error:'Bad JSON'})); }
+function setStatusText(t){ qs('#statusText').textContent=t; }
+
+async function apiRequest(action,payload={}){
+  const r=await safeFetch({action,idToken,...payload});
+  return ensureJson(r);
+}
+
+function renderBills(){
+  const list=qs('#bills'), empty=qs('#emptyBills'), loading=qs('#loadingBills');
+  loading.style.display='none';
+  list.innerHTML='';
+  if(!BILLS.length){ empty.style.display='block'; return; }
+  empty.style.display='none';
+  for(const b of BILLS){
+    const wrap=document.createElement('div');
+    wrap.className='bill';
+    const main=document.createElement('div');
+    const title=document.createElement('div'); title.className='title'; title.textContent=b.name;
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.innerHTML = `
+      <span class="badge">${b.category||'General'}</span>
+      <span class="badge ${b.status==='Paid'?'medium':'urgent'}">${b.status||'Unpaid'}</span>
+      <span class="badge">Due: ${b.dueDate||'N/A'}</span>
+      <span class="badge">Amt: ${b.amount||0}</span>
+    `;
+    main.appendChild(title); main.appendChild(meta);
+
+    const right=document.createElement('div');
+    right.style.display='flex'; right.style.gap='8px';
+    const edit=document.createElement('button'); edit.className='icon-btn'; edit.textContent='✎';
+    edit.addEventListener('click',()=>openEditBill(b));
+    const del=document.createElement('button'); del.className='icon-btn'; del.textContent='✕';
+    del.addEventListener('click',()=>openDeleteBill(b));
+
+    right.appendChild(edit); right.appendChild(del);
+    wrap.appendChild(main); wrap.appendChild(right);
+    list.appendChild(wrap);
+  }
+}
+
+function openAddBill(){
+  qs('#addName').value=''; qs('#addCategory').value=''; qs('#addAmount').value='';
+  qs('#addDue').value=''; qs('#addStatus').value='Unpaid';
+  openModal('modalAddBill');
+}
+async function saveAddBill(){
+  const r=await apiRequest('addBill',{
+    name:qs('#addName').value.trim(),
+    category:qs('#addCategory').value.trim(),
+    amount:qs('#addAmount').value.trim(),
+    dueDate:qs('#addDue').value.trim(),
+    status:qs('#addStatus').value.trim()
+  });
+  if(r.ok){ BILLS.unshift(r.data); renderBills(); closeModal('modalAddBill'); }
+  else alert(r.error||'Error');
+}
+function openEditBill(b){
+  EDIT_BILL=b;
+  qs('#editName').value=b.name||'';
+  qs('#editCategory').value=b.category||'';
+  qs('#editAmount').value=b.amount||'';
+  qs('#editDue').value=b.dueDate||'';
+  qs('#editStatus').value=b.status||'Unpaid';
+  openModal('modalEditBill');
+}
+async function saveEditBill(){
+  if(!EDIT_BILL) return;
+  const r=await apiRequest('updateBill',{
+    id:EDIT_BILL.id,
+    name:qs('#editName').value.trim(),
+    category:qs('#editCategory').value.trim(),
+    amount:qs('#editAmount').value.trim(),
+    dueDate:qs('#editDue').value.trim(),
+    status:qs('#editStatus').value.trim()
+  });
+  if(r.ok){
+    const idx=BILLS.findIndex(x=>x.id===EDIT_BILL.id);
+    if(idx!==-1) BILLS[idx]=r.data;
+    renderBills();
+    closeModal('modalEditBill');
+  } else alert(r.error||'Error');
+}
+function openDeleteBill(b){
+  DELETE_BILL=b;
+  qs('#deleteBillTitle').textContent=b.name||'';
+  openModal('modalDeleteBill');
+}
+async function confirmDeleteBill(){
+  if(!DELETE_BILL) return;
+  const r=await apiRequest('deleteBill',{id:DELETE_BILL.id});
+  if(r.ok){
+    BILLS=BILLS.filter(x=>x.id!==DELETE_BILL.id);
+    renderBills();
+    closeModal('modalDeleteBill');
+  } else alert(r.error||'Error');
+}
+
+function openModal(id){ const w=qs('#'+id); if(!w) return; w.classList.add('open'); }
+function closeModal(id){ const w=qs('#'+id); if(!w) return; w.classList.remove('open'); }
+
+async function refreshBills(){
+  qs('#loadingBills').style.display='block';
+  const r=await apiRequest('listBills');
+  if(r.ok){ BILLS=r.data||[]; renderBills(); setStatusText('Synced'); }
+  else alert(r.error||'Error');
+}
+
+function init(){
+  qs('#fabAdd').addEventListener('click',openAddBill);
+  qs('#addBillBtn').addEventListener('click',saveAddBill);
+  qs('#saveBillBtn').addEventListener('click',saveEditBill);
+  qs('#deleteBillBtn').addEventListener('click',confirmDeleteBill);
+  qs('#refreshBtn').addEventListener('click',refreshBills);
+
+  qs('#fabMenu').addEventListener('click',()=>openModal('modalOptions'));
+  qs('#optionTasksBtn').addEventListener('click',()=>window.location.href='./home.html');
+  qs('#optionBillsBtn').addEventListener('click',()=>window.location.href='./bills.html');
+  qs('#optionGroceryBtn').addEventListener('click',()=>window.location.href='./grocery.html');
+
+  document.querySelectorAll('[data-close]').forEach(el=>{
+    el.addEventListener('click',()=>closeModal(el.getAttribute('data-close')));
+  });
+
+  qs('#logoutBtn').addEventListener('click',()=>{
+    localStorage.removeItem('idToken');
+    window.location.href = './index.html';
+  });
+
+  refreshBills();
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
