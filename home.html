@@ -5,180 +5,365 @@
 <title>AI Task Manager</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#0b0f14"/>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="./config.js"></script>
 <style>
-:root {
+:root{
   --bg:#0b0f14; --card:#12171d; --elevate:#1a212a; --text:#e9eef6; --muted:#aab6c5;
   --accent:#45a1ff; --urgent:#ff5066; --high:#ffb84d; --medium:#51d07d; --border:#26313f;
-  --ok:#3ddc84; --danger:#ff5a5f; --shadow:0 10px 30px rgba(0,0,0,.4);
-  --radius:16px;
+  --ok:#3ddc84; --danger:#ff5a5f; --shadow:0 10px 30px rgba(0,0,0,.4); --radius:16px;
 }
-html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial; }
-body { -webkit-font-smoothing:antialiased; }
-.app { max-width:560px; margin:0 auto; min-height:100dvh; display:flex; flex-direction:column; }
-
-.appbar {
-  position:sticky; top:0; z-index:50;
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial;}
+.app{max-width:560px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;}
+.appbar{
+  position:sticky;top:0;z-index:50;
   background:linear-gradient(180deg,rgba(18,23,29,.95),rgba(18,23,29,.7));
-  border-bottom:1px solid var(--border);
-  backdrop-filter:blur(10px);
-  padding:14px 16px 12px;
-  display:flex; align-items:center; gap:12px;
+  border-bottom:1px solid var(--border);backdrop-filter:blur(10px);
+  padding:14px 16px 12px;display:flex;align-items:center;gap:12px;
 }
-.logo { width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
-  background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; font-weight:900; }
-h1 { margin:0; font-size:18px; font-weight:700; }
-.subtitle { margin-left:auto; font-size:12px; color:var(--muted); }
-.right-actions { display:flex; gap:8px; align-items:center; }
-.icon-btn {
-  width:36px; height:36px; border:1px solid var(--border); background:#121821;
-  border-radius:10px; display:grid; place-items:center; font-weight:900; color:var(--text); cursor:pointer;
+.logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),#9ad2ff);color:#06101a;font-weight:900;}
+h1{margin:0;font-size:18px;font-weight:700;}
+.subtitle{margin-left:auto;font-size:12px;color:var(--muted);}
+.right-actions{display:flex;gap:8px;align-items:center;}
+.icon-btn{
+  width:36px;height:36px;border:1px solid var(--border);background:#121821;
+  border-radius:10px;display:grid;place-items:center;font-weight:900;color:var(--text);cursor:pointer;
 }
-.auth { display:flex; align-items:center; gap:8px; }
-.auth-btn {
-  border:1px solid var(--border);
-  background:#121821; color:var(--text);
-  border-radius:10px; padding:8px 10px; font-size:12px; cursor:pointer;
-}
+.auth-btn{border:1px solid var(--border);background:#121821;color:var(--text);border-radius:10px;padding:8px 10px;font-size:12px;cursor:pointer;}
+.content{flex:1;padding:16px;display:flex;flex-direction:column;gap:16px;}
+.card{background:linear-gradient(180deg,#1a212a,#0e1217);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);}
+.list-card{padding:8px;display:grid;gap:8px;}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:4px 4px 6px;}
+.chip{border:1px solid var(--border);background:#121821;color:var(--muted);border-radius:20px;padding:8px 12px;font-size:12px;cursor:pointer;}
+.chip.active{color:var(--text);border-color:var(--accent);background:#1a2330;}
+.loading,.empty{text-align:center;color:var(--muted);padding:24px 8px;font-size:14px;}
 
-.content { flex:1; padding:16px; display:flex; flex-direction:column; gap:16px; }
-
-.card { background:linear-gradient(180deg,#1a212a,#0e1217); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
-.list-card { padding:8px; display:grid; gap:8px; }
-
-.chips { display:flex; flex-wrap:wrap; gap:8px; padding:4px 4px 6px; }
-.chip {
-  border:1px solid var(--border); background:#121821; color:var(--muted);
-  border-radius:20px; padding:8px 12px; font-size:12px; cursor:pointer;
+.task{
+  display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;
+  border:1px solid var(--border);background:linear-gradient(180deg,#121820,#0f141a);
+  border-radius:12px;padding:12px;
 }
-.chip.active { color:var(--text); border-color:var(--accent); background:#1a2330; }
+.task.done{opacity:.65;filter:grayscale(.3);}
+.task .left{display:grid;place-items:center;}
+.task .left input{width:20px;height:20px;accent-color:var(--ok);cursor:pointer;}
+.task .title{font-size:14px;font-weight:700;word-break:break-word;}
+.task .meta{display:flex;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);}
+.badge{font-size:11px;border:1px solid var(--border);padding:4px 8px;border-radius:999px;background:#182028;}
+.badge.urgent{background:linear-gradient(135deg,var(--urgent),#ff7a8a);color:#fff;border:none;}
+.badge.high{background:linear-gradient(135deg,var(--high),#ffd699);color:#1a1406;border:none;}
+.badge.medium{background:linear-gradient(135deg,var(--medium),#a4f0c5);color:#0f2016;border:none;}
 
-.loading, .empty { text-align:center; color:var(--muted); padding:24px 8px; font-size:14px; }
+.fab{
+  position:fixed;right:20px;bottom:20px;width:56px;height:56px;border-radius:50%;
+  border:0;background:linear-gradient(135deg,var(--accent),#9ad2ff);color:#06101a;
+  font-weight:900;font-size:22px;display:grid;place-items:center;
+  box-shadow:0 10px 24px rgba(69,161,255,.35);cursor:pointer;z-index:200;
+}
+.fab-alt{right:auto;left:20px;}
 
-.task {
-  display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
-  border:1px solid var(--border); background:linear-gradient(180deg,#121820,#0f141a);
-  border-radius:12px; padding:12px;
+.modal-wrap{position:fixed;inset:0;display:none;align-items:flex-end;justify-content:center;z-index:300;}
+.modal-wrap.open{display:flex;}
+.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);}
+.modal{
+  position:relative;width:100%;max-width:560px;background:linear-gradient(180deg,#1a212a,#0e1217);
+  border:1px solid var(--border);border-bottom:0;border-top-left-radius:16px;border-top-right-radius:16px;
+  box-shadow:0 -10px 30px rgba(0,0,0,.45);max-height:92dvh;overflow:auto;
 }
-.task.done { opacity:.65; filter:grayscale(.3); }
-.task .left { display:grid; place-items:center; }
-.task .left input { width:20px; height:20px; accent-color:var(--ok); cursor:pointer; }
-.task .title { font-size:14px; font-weight:700; word-break:break-word; }
-.task .meta { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
-.badge {
-  font-size:11px; border:1px solid var(--border); padding:4px 8px; border-radius:999px;
-  background:#182028;
+.modal-header{padding:14px 16px 8px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;}
+.modal-title{margin:0;font-size:16px;font-weight:800;}
+.modal-body{padding:14px 16px;display:grid;gap:12px;}
+.modal-actions{padding:12px 16px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);}
+.btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;font-weight:700;background:linear-gradient(135deg,var(--accent),#9ad2ff);color:#06101a;cursor:pointer;}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
+.btn.danger{background:linear-gradient(135deg,var(--danger),#ff8a8e);color:#330c0d;}
+input[type=text],input[type=datetime-local],textarea{
+  width:100%;background:#1c2530;border:1px solid var(--border);
+  border-radius:10px;padding:12px;color:var(--text);outline:none;
 }
-.badge.urgent { background:linear-gradient(135deg,var(--urgent),#ff7a8a); color:#fff; border:none; }
-.badge.high { background:linear-gradient(135deg,var(--high),#ffd699); color:#1a1406; border:none; }
-.badge.medium { background:linear-gradient(135deg,var(--medium),#a4f0c5); color:#0f2016; border:none; }
-
-.fab {
-  position:fixed; right:20px; bottom:20px; width:56px; height:56px; border-radius:50%;
-  border:0; background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a;
-  font-weight:900; font-size:22px; display:grid; place-items:center;
-  box-shadow:0 10px 24px rgba(69,161,255,.35); cursor:pointer; z-index:200;
+textarea{resize:vertical;min-height:70px;max-height:200px;}
+label{font-size:12px;color:var(--muted);}
+@media (max-width:420px){
+  .task{grid-template-columns:auto 1fr;}
 }
-.fab:active { transform:translateY(1px) scale(.98); }
-.fab-alt { right:auto; left:20px; }
-
-/* Modals */
-.modal-wrap { position:fixed; inset:0; display:none; align-items:flex-end; justify-content:center; z-index:300; }
-.modal-wrap.open { display:flex; }
-.modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(4px); }
-.modal {
-  position:relative; width:100%; max-width:560px;
-  background:linear-gradient(180deg,#1a212a,#0e1217); border:1px solid var(--border); border-bottom:0;
-  border-top-left-radius:16px; border-top-right-radius:16px;
-  box-shadow:0 -10px 30px rgba(0,0,0,.45); animation:modalUp .2s ease-out;
-  max-height:92dvh; overflow:auto;
-}
-@keyframes modalUp { from { transform:translateY(25px); opacity:0; } to { transform:translateY(0); opacity:1; } }
-.modal-header { padding:14px 16px 8px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; }
-.modal-title { margin:0; font-size:16px; font-weight:800; }
-.modal-body { padding:14px 16px; display:grid; gap:12px; }
-.modal-actions { padding:12px 16px 16px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border); }
-
-.btn {
-  appearance:none; border:0; border-radius:12px; padding:12px 14px; font-weight:700;
-  background:linear-gradient(135deg,var(--accent),#9ad2ff); color:#06101a; cursor:pointer;
-  box-shadow:0 8px 20px rgba(69,161,255,.35);
-}
-.btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border); box-shadow:none; }
-.btn.danger { background:linear-gradient(135deg,var(--danger),#ff8a8e); color:#330c0d; box-shadow:0 8px 20px rgba(255,90,95,.25); }
-
-input[type=text], input[type=datetime-local], textarea {
-  width:100%; background:#1c2530; border:1px solid var(--border);
-  border-radius:10px; padding:12px; color:var(--text); outline:none;
-}
-input:focus, textarea:focus { border-color:var(--accent); background:#223041; }
-textarea { resize:vertical; min-height:70px; max-height:200px; }
-label { font-size:12px; color:var(--muted); }
 </style>
 </head>
 <body>
-  <div class="app">
-    <div class="appbar">
-      <div class="logo">AI</div>
-      <h1>Task Manager</h1>
-      <div class="subtitle" id="statusText">Loading…</div>
-      <div class="right-actions">
-        <button class="icon-btn" id="refreshBtn">↻</button>
-        <div class="auth">
-          <button class="auth-btn" id="logoutBtn">Logout</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="content">
-      <section class="card list-card">
-        <div class="chips">
-          <div class="chip active" data-filter="all">All</div>
-          <div class="chip" data-filter="urgent">Urgent</div>
-          <div class="chip" data-filter="high">High</div>
-          <div class="chip" data-filter="medium">Medium</div>
-          <div class="chip" data-filter="open">Open</div>
-          <div class="chip" data-filter="done">Done</div>
-        </div>
-        <div class="loading" id="loadingTasks">Loading tasks…</div>
-        <div class="empty" id="emptyTasks" style="display:none;">No tasks yet.</div>
-        <div id="tasks"></div>
-      </section>
+<div class="app">
+  <div class="appbar">
+    <div class="logo">AI</div>
+    <h1>Task Manager</h1>
+    <div class="subtitle" id="statusText">Loading…</div>
+    <div class="right-actions">
+      <button class="icon-btn" id="refreshBtn">↻</button>
+      <button class="auth-btn" id="logoutBtn">Logout</button>
     </div>
   </div>
 
-  <button class="fab fab-alt" id="fabMenu">≡</button>
-  <button class="fab" id="fabAdd">✎</button>
+  <div class="content">
+    <section class="card list-card">
+      <div class="chips">
+        <div class="chip active" data-filter="all">All</div>
+        <div class="chip" data-filter="urgent">Urgent</div>
+        <div class="chip" data-filter="high">High</div>
+        <div class="chip" data-filter="medium">Medium</div>
+        <div class="chip" data-filter="open">Open</div>
+        <div class="chip" data-filter="done">Done</div>
+      </div>
+      <div class="loading" id="loadingTasks">Loading tasks…</div>
+      <div class="empty" id="emptyTasks" style="display:none;">No tasks yet.</div>
+      <div id="tasks"></div>
+    </section>
+  </div>
+</div>
 
-  <!-- Add/Edit/Delete/Options Modals (same as your previous index) -->
+<button class="fab fab-alt" id="fabMenu">≡</button>
+<button class="fab" id="fabAdd">✎</button>
+
+<div class="modal-wrap" id="modalAddTask">
+  <div class="modal-overlay" data-close="modalAddTask"></div>
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Add Task</h3></div>
+    <div class="modal-body">
+      <div><label>Title</label><input type="text" id="addTitle"></div>
+      <div><label>Description</label><textarea id="addDescription"></textarea></div>
+      <div><label>Due date/time</label><input type="datetime-local" id="addDue"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="modalAddTask">Cancel</button>
+      <button class="btn" id="addSaveBtn">Add Task</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="modalEditTask">
+  <div class="modal-overlay" data-close="modalEditTask"></div>
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Edit Task</h3></div>
+    <div class="modal-body">
+      <div><label>Title</label><input type="text" id="editTitle"></div>
+      <div><label>Description</label><textarea id="editDescription"></textarea></div>
+      <div><label>Due date/time</label><input type="datetime-local" id="editDue"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="editCompleted"><label for="editCompleted" style="margin:0;">Mark as completed</label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="modalEditTask">Cancel</button>
+      <button class="btn" id="editSaveBtn">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="modalDeleteTask">
+  <div class="modal-overlay" data-close="modalDeleteTask"></div>
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Delete Task</h3></div>
+    <div class="modal-body">
+      <div>Delete this task?</div>
+      <div id="deleteTaskTitle" style="font-weight:800;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="modalDeleteTask">Cancel</button>
+      <button class="btn danger" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="modalOptions">
+  <div class="modal-overlay" data-close="modalOptions"></div>
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Options</h3></div>
+    <div class="modal-body">
+      <button class="btn" id="optionTasksBtn">Task Manager</button>
+      <button class="btn" id="optionBillsBtn">Bill Management</button>
+      <button class="btn" id="optionGroceryBtn">Grocery Management</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="modalOptions">Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const WEB_APP_URL = window.APP_CONFIG.WEB_APP_URL;
 let idToken = localStorage.getItem('idToken') || '';
+if(!idToken) window.location.href = './index.html';
 
-if(!idToken){
-  window.location.href = './index.html';
+function getEmailFromToken(token){
+  try{
+    const base64 = token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    const json = JSON.parse(atob(base64));
+    return json.email || '';
+  }catch(e){ return ''; }
 }
+
+let TASKS = [];
+let CURRENT_FILTER='all';
+let EDIT_TASK=null;
+let DELETE_TASK_REF=null;
 
 const qs=s=>document.querySelector(s);
 const qsa=s=>Array.from(document.querySelectorAll(s));
-let TASKS=[], CURRENT_FILTER='all', EDIT_TASK=null, DELETE_TASK_REF=null;
-
 function safeFetch(body){ return fetch(WEB_APP_URL,{ method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(body) }); }
 function ensureJson(r){ return r.json().catch(()=>({ok:false,error:'Bad JSON'})); }
-
 async function apiRequest(action,payload={}){
-  const r=await safeFetch({action,idToken,...payload});
+  const userEmail = getEmailFromToken(idToken);
+  const r=await safeFetch({action,idToken,userEmail,...payload});
   return ensureJson(r);
 }
 
-/* Use your existing task JS logic here (same as previous version) */
+const PRIORITY_ORDER={Urgent:0,High:1,Medium:2};
+function sortTasks(tasks){
+  return tasks.slice().sort((a,b)=>{
+    const pa=PRIORITY_ORDER[a.priority]??999;
+    const pb=PRIORITY_ORDER[b.priority]??999;
+    if(pa!==pb) return pa-pb;
+    const ad=a.dueDate?new Date(a.dueDate).getTime():Infinity;
+    const bd=b.dueDate?new Date(b.dueDate).getTime():Infinity;
+    if(ad!==bd) return ad-bd;
+    return 0;
+  });
+}
+function applyFilter(t){
+  switch(CURRENT_FILTER){
+    case 'urgent': return t.priority==='Urgent';
+    case 'high': return t.priority==='High';
+    case 'medium': return t.priority==='Medium';
+    case 'open': return t.status==='Open';
+    case 'done': return t.status==='Done';
+    default: return true;
+  }
+}
+function priorityClass(p){
+  const x=(p||'').toLowerCase();
+  if(x==='urgent') return 'urgent';
+  if(x==='high') return 'high';
+  return 'medium';
+}
+function renderTasks(){
+  const list=qs('#tasks'), empty=qs('#emptyTasks'), loading=qs('#loadingTasks');
+  loading.style.display='none';
+  list.innerHTML='';
+  const arr=sortTasks(TASKS).filter(applyFilter);
+  if(!arr.length){ empty.style.display='block'; return; }
+  empty.style.display='none';
+  for(const t of arr){
+    const wrap=document.createElement('div'); wrap.className='task'+(t.status==='Done'?' done':'');
+    const left=document.createElement('div'); left.className='left';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=(t.status==='Done');
+    cb.addEventListener('change',()=>onToggleComplete(t,cb.checked));
+    left.appendChild(cb);
 
-document.getElementById('logoutBtn').addEventListener('click',()=>{
-  localStorage.removeItem('idToken');
-  window.location.href = './index.html';
-});
+    const main=document.createElement('div');
+    const title=document.createElement('div'); title.className='title'; title.textContent=t.title;
+    const meta=document.createElement('div'); meta.className='meta';
+    const priority=document.createElement('span'); priority.className='badge '+priorityClass(t.priority); priority.textContent=t.priority||'Medium';
+    const due=document.createElement('span'); due.className='badge'; due.textContent=t.dueDate?('Due: '+t.dueDate):'No due date';
+    meta.appendChild(priority); meta.appendChild(due);
+    main.appendChild(title); main.appendChild(meta);
+
+    const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px';
+    const edit=document.createElement('button'); edit.className='icon-btn'; edit.textContent='✎'; edit.addEventListener('click',()=>openEditTask(t));
+    const del=document.createElement('button'); del.className='icon-btn'; del.textContent='✕'; del.addEventListener('click',()=>openDeleteTask(t));
+    right.appendChild(edit); right.appendChild(del);
+
+    wrap.appendChild(left); wrap.appendChild(main); wrap.appendChild(right); list.appendChild(wrap);
+  }
+}
+
+function openAddTask(){
+  qs('#addTitle').value=''; qs('#addDescription').value=''; qs('#addDue').value='';
+  openModal('modalAddTask');
+}
+async function saveAddTask(){
+  const title=qs('#addTitle').value.trim();
+  if(!title){ alert('Title required'); return; }
+  const r=await apiRequest('addTask',{
+    title, description:qs('#addDescription').value.trim(), dueDate:qs('#addDue').value.trim()
+  });
+  if(r.ok){ TASKS.unshift(r.data); renderTasks(); closeModal('modalAddTask'); } else alert(r.error||'Error');
+}
+function openEditTask(t){
+  EDIT_TASK=t;
+  qs('#editTitle').value=t.title||'';
+  qs('#editDescription').value=t.description||'';
+  qs('#editDue').value=t.dueDate||'';
+  qs('#editCompleted').checked=(t.status==='Done');
+  openModal('modalEditTask');
+}
+async function saveEditTask(){
+  if(!EDIT_TASK) return;
+  const r=await apiRequest('updateTask',{
+    id:EDIT_TASK.id,
+    title:qs('#editTitle').value.trim(),
+    description:qs('#editDescription').value.trim(),
+    dueDate:qs('#editDue').value.trim(),
+    status:qs('#editCompleted').checked?'Done':'Open'
+  });
+  if(r.ok){
+    const idx=TASKS.findIndex(x=>x.id===EDIT_TASK.id);
+    if(idx!==-1) TASKS[idx]=r.data;
+    renderTasks();
+    closeModal('modalEditTask');
+  } else alert(r.error||'Error');
+}
+function openDeleteTask(t){
+  DELETE_TASK_REF=t;
+  qs('#deleteTaskTitle').textContent=t.title||'';
+  openModal('modalDeleteTask');
+}
+async function confirmDeleteTask(){
+  if(!DELETE_TASK_REF) return;
+  const r=await apiRequest('deleteTask',{id:DELETE_TASK_REF.id});
+  if(r.ok){ TASKS=TASKS.filter(x=>x.id!==DELETE_TASK_REF.id); renderTasks(); closeModal('modalDeleteTask'); }
+  else alert(r.error||'Error');
+}
+async function onToggleComplete(task,completed){
+  const r=await apiRequest('toggleComplete',{id:task.id,completed});
+  if(r.ok){ const idx=TASKS.findIndex(x=>x.id===task.id); if(idx!==-1) TASKS[idx]=r.data; renderTasks(); }
+  else alert(r.error||'Error');
+}
+
+function openModal(id){ const w=qs('#'+id); if(!w) return; w.classList.add('open'); }
+function closeModal(id){ const w=qs('#'+id); if(!w) return; w.classList.remove('open'); }
+
+async function refreshTasks(){
+  qs('#loadingTasks').style.display='block';
+  const r=await apiRequest('list');
+  if(r.ok){ TASKS=r.data||[]; renderTasks(); } else alert(r.error||'Error');
+}
+
+function init(){
+  qsa('.chip').forEach(ch=>{
+    ch.addEventListener('click',()=>{
+      qsa('.chip').forEach(c=>c.classList.remove('active'));
+      ch.classList.add('active');
+      CURRENT_FILTER=ch.getAttribute('data-filter');
+      renderTasks();
+    });
+  });
+
+  qs('#fabAdd').addEventListener('click',openAddTask);
+  qs('#addSaveBtn').addEventListener('click',saveAddTask);
+  qs('#editSaveBtn').addEventListener('click',saveEditTask);
+  qs('#deleteConfirmBtn').addEventListener('click',confirmDeleteTask);
+  qs('#refreshBtn').addEventListener('click',refreshTasks);
+
+  qs('#fabMenu').addEventListener('click',()=>openModal('modalOptions'));
+  qs('#optionTasksBtn').addEventListener('click',()=>window.location.href='./home.html');
+  qs('#optionBillsBtn').addEventListener('click',()=>window.location.href='./bills.html');
+  qs('#optionGroceryBtn').addEventListener('click',()=>window.location.href='./grocery.html');
+
+  document.querySelectorAll('[data-close]').forEach(el=>{
+    el.addEventListener('click',()=>closeModal(el.getAttribute('data-close')));
+  });
+
+  qs('#logoutBtn').addEventListener('click',()=>{ localStorage.removeItem('idToken'); window.location.href = './index.html'; });
+
+  refreshTasks();
+}
+document.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
 </html>
