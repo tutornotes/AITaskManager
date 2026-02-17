@@ -1,4 +1,6 @@
 const SPREADSHEET_NAME = 'AI Task Manager DB';
+const GOOGLE_CLIENT_ID = '117548045551-4gh98h2i28obgaeit1ptf6l339srnp0i.apps.googleusercontent.com';
+const VERIFY_TOKENS = false; // fast mode; set true later if you want strict verification
 
 // Tabs
 const TASKS_SHEET = 'Tasks';
@@ -10,25 +12,25 @@ const GROCERY_SUMMARY_SHEET = 'GrocerySummary';
 const GROCERY_ANALYSIS_SHEET = 'GroceryAnalysis';
 
 // Columns
-const TASK_COLUMNS = ['id','title','description','dueDate','priority','status','createdAt','updatedAt'];
-const TOKEN_COLUMNS = ['fcmToken','createdAt'];
+const TASK_COLUMNS = ['id','title','description','dueDate','priority','status','createdAt','updatedAt','userEmail'];
+const TOKEN_COLUMNS = ['fcmToken','createdAt','userEmail'];
 const BILL_COLUMNS = [
   'id','name','category','amount','dueDate','status',
   'lastMonthAmount','avgAmount','pctChange','spike',
-  'aiInsight','updatedAt','createdAt'
+  'aiInsight','updatedAt','createdAt','userEmail'
 ];
-const BILL_HISTORY_COLUMNS = ['id','billId','amount','month','createdAt'];
-const GROCERY_ITEM_COLUMNS = ['id','item','essential','expectedPrice','createdAt'];
+const BILL_HISTORY_COLUMNS = ['id','billId','amount','month','createdAt','userEmail'];
+const GROCERY_ITEM_COLUMNS = ['id','item','essential','expectedPrice','createdAt','userEmail'];
 const GROCERY_SUMMARY_COLUMNS = [
   'id','totalExpected','actualTotal','difference',
-  'overspendPercent','nonEssentialPercent','aiInsight','createdAt'
+  'overspendPercent','nonEssentialPercent','aiInsight','createdAt','userEmail'
 ];
 const GROCERY_ANALYSIS_COLUMNS = [
   'id','items','finalAmount','estimatedTotal','difference',
-  'avoidItems','tips','summary','createdAt'
+  'avoidItems','tips','summary','createdAt','userEmail'
 ];
 
-// Gemini (only for bills)
+// Gemini (Bills only)
 const GEMINI_API_KEY = 'AIzaSyDptwaOATS-Be6VdRBTtJnMbdZgQDNA8UE';
 const GEMINI_MODEL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
@@ -37,35 +39,79 @@ function doPost(e){ return handleRequest(e); }
 
 function handleRequest(e){
   try{
-    const data=parseRequest(e);
-    const action=(data.action||'').toString();
+    const data = parseRequest(e);
+    const action = (data.action||'').toString();
+    const userEmail = requireUserEmail(data);
+
+    ensureAllSheets();
 
     switch(action){
-      case 'list': return jsonResponse({ok:true,data:listTasks()});
-      case 'addTask': return jsonResponse({ok:true,data:addTask(data)});
-      case 'updateTask': return jsonResponse({ok:true,data:updateTask(data)});
-      case 'toggleComplete': return jsonResponse({ok:true,data:toggleComplete(data)});
-      case 'deleteTask': return jsonResponse({ok:true,data:deleteTask(data)});
-      case 'registerFcmToken': registerFcmToken(data); return jsonResponse({ok:true,data:{registered:true}});
+      case 'list': return jsonResponse({ok:true,data:listTasks(userEmail)});
+      case 'addTask': return jsonResponse({ok:true,data:addTask(data,userEmail)});
+      case 'updateTask': return jsonResponse({ok:true,data:updateTask(data,userEmail)});
+      case 'toggleComplete': return jsonResponse({ok:true,data:toggleComplete(data,userEmail)});
+      case 'deleteTask': return jsonResponse({ok:true,data:deleteTask(data,userEmail)});
+      case 'registerFcmToken': registerFcmToken(data,userEmail); return jsonResponse({ok:true,data:{registered:true}});
 
-      case 'listBills': return jsonResponse({ok:true,data:listBills()});
-      case 'addBill': return jsonResponse({ok:true,data:addBill(data)});
-      case 'updateBill': return jsonResponse({ok:true,data:updateBill(data)});
-      case 'deleteBill': return jsonResponse({ok:true,data:deleteBill(data)});
-      case 'updateBillAmount': return jsonResponse({ok:true,data:updateBillAmount(data)});
+      case 'listBills': return jsonResponse({ok:true,data:listBills(userEmail)});
+      case 'addBill': return jsonResponse({ok:true,data:addBill(data,userEmail)});
+      case 'updateBill': return jsonResponse({ok:true,data:updateBill(data,userEmail)});
+      case 'deleteBill': return jsonResponse({ok:true,data:deleteBill(data,userEmail)});
+      case 'updateBillAmount': return jsonResponse({ok:true,data:updateBillAmount(data,userEmail)});
 
-      case 'addGroceryItem': return jsonResponse({ok:true,data:addGroceryItem(data)});
-      case 'listGroceryItems': return jsonResponse({ok:true,data:listGroceryItems()});
-      case 'deleteGroceryItem': return jsonResponse({ok:true,data:deleteGroceryItem(data)});
-      case 'finalizeGrocery': return jsonResponse({ok:true,data:finalizeGrocery(data)});
-
-      case 'saveGroceryAnalysis': return jsonResponse({ok:true,data:saveGroceryAnalysis(data)});
+      case 'addGroceryItem': return jsonResponse({ok:true,data:addGroceryItem(data,userEmail)});
+      case 'listGroceryItems': return jsonResponse({ok:true,data:listGroceryItems(userEmail)});
+      case 'deleteGroceryItem': return jsonResponse({ok:true,data:deleteGroceryItem(data,userEmail)});
+      case 'finalizeGrocery': return jsonResponse({ok:true,data:finalizeGrocery(data,userEmail)});
+      case 'saveGroceryAnalysis': return jsonResponse({ok:true,data:saveGroceryAnalysis(data,userEmail)});
 
       default: return jsonResponse({ok:false,error:'Unknown action'});
     }
   }catch(err){
     return jsonResponse({ok:false,error:err.message||'Server error'});
   }
+}
+
+/* ===== AUTH ===== */
+function requireUserEmail(data){
+  const token = (data.idToken || '').toString();
+  if(!token) throw new Error('Not authenticated');
+
+  if(!VERIFY_TOKENS){
+    const email = decodeJwtEmail(token) || (data.userEmail||'').toString();
+    if(!email) throw new Error('Email not available');
+    return email;
+  }
+
+  const cache = CacheService.getUserCache();
+  const cacheKey = buildCacheKey(token);
+  const cached = cache.get(cacheKey);
+  if(cached) return cached;
+
+  const res = UrlFetchApp.fetch(
+    'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(token),
+    { muteHttpExceptions: true }
+  );
+  const info = JSON.parse(res.getContentText() || '{}');
+  if(info.aud !== GOOGLE_CLIENT_ID) throw new Error('Invalid token');
+  if(!info.email) throw new Error('Email not available');
+
+  cache.put(cacheKey, info.email, 300);
+  return info.email;
+}
+
+function decodeJwtEmail(token){
+  try{
+    const payload = token.split('.')[1];
+    const json = Utilities.newBlob(Utilities.base64DecodeWebSafe(payload)).getDataAsString();
+    const obj = JSON.parse(json);
+    return obj.email || '';
+  }catch(e){ return ''; }
+}
+
+function buildCacheKey(token){
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token);
+  return 'tok_' + Utilities.base64EncodeWebSafe(bytes).substring(0, 40);
 }
 
 /* ===== REQUEST PARSING ===== */
@@ -79,6 +125,17 @@ function parseRequest(e){
 }
 
 /* ===== SHEET HELPERS ===== */
+function ensureAllSheets(){
+  const ss=getSpreadsheet();
+  getOrCreateSheet(ss, TASKS_SHEET, TASK_COLUMNS);
+  getOrCreateSheet(ss, TOKENS_SHEET, TOKEN_COLUMNS);
+  getOrCreateSheet(ss, BILLS_SHEET, BILL_COLUMNS);
+  getOrCreateSheet(ss, BILL_HISTORY_SHEET, BILL_HISTORY_COLUMNS);
+  getOrCreateSheet(ss, GROCERY_ITEMS_SHEET, GROCERY_ITEM_COLUMNS);
+  getOrCreateSheet(ss, GROCERY_SUMMARY_SHEET, GROCERY_SUMMARY_COLUMNS);
+  getOrCreateSheet(ss, GROCERY_ANALYSIS_SHEET, GROCERY_ANALYSIS_COLUMNS);
+}
+
 function getSpreadsheet(){
   const files=DriveApp.getFilesByName(SPREADSHEET_NAME);
   if(files.hasNext()) return SpreadsheetApp.open(files.next());
@@ -86,12 +143,8 @@ function getSpreadsheet(){
 }
 function getOrCreateSheet(ss,name,columns){
   let sh=ss.getSheetByName(name);
-  if(!sh){
-    sh=ss.insertSheet(name);
-    sh.appendRow(columns);
-  }else if(sh.getLastRow()===0){
-    sh.appendRow(columns);
-  }
+  if(!sh){ sh=ss.insertSheet(name); sh.appendRow(columns); }
+  else if(sh.getLastRow()===0){ sh.appendRow(columns); }
   ensureColumns(sh,columns);
   return sh;
 }
@@ -99,31 +152,25 @@ function ensureColumns(sh,columns){
   const lastCol=Math.max(sh.getLastColumn(),columns.length);
   const header=sh.getRange(1,1,1,lastCol).getValues()[0];
   let changed=false;
-  columns.forEach((col,i)=>{
-    if(header[i]!==col){ header[i]=col; changed=true; }
-  });
-  if(changed){
-    sh.getRange(1,1,1,columns.length).setValues([columns]);
-  }
+  columns.forEach((col,i)=>{ if(header[i]!==col){ header[i]=col; changed=true; } });
+  if(changed){ sh.getRange(1,1,1,columns.length).setValues([columns]); }
 }
 function sheetToObjects(sh){
   const values=sh.getDataRange().getValues();
   if(values.length<2) return [];
   const headers=values[0];
   return values.slice(1).map(row=>{
-    const obj={};
-    headers.forEach((h,i)=>{ obj[h]=row[i]===''?'':row[i]; });
-    return obj;
+    const obj={}; headers.forEach((h,i)=>{ obj[h]=row[i]===''?'':row[i]; }); return obj;
   });
 }
 
 /* ===== TASKS ===== */
-function listTasks(){
+function listTasks(userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,TASKS_SHEET,TASK_COLUMNS);
-  return sheetToObjects(sh);
+  return sheetToObjects(sh).filter(r=>r.userEmail===userEmail);
 }
-function addTask(data){
+function addTask(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,TASKS_SHEET,TASK_COLUMNS);
   const now=new Date().toISOString();
@@ -134,12 +181,12 @@ function addTask(data){
     dueDate:(data.dueDate||'').toString(),
     priority:(data.priority||'Medium').toString(),
     status:(data.status||'Open').toString(),
-    createdAt:now, updatedAt:now
+    createdAt:now, updatedAt:now, userEmail
   };
   sh.appendRow(TASK_COLUMNS.map(k=>task[k]||''));
   return task;
 }
-function updateTask(data){
+function updateTask(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,TASKS_SHEET,TASK_COLUMNS);
   const rows=sh.getDataRange().getValues();
@@ -147,6 +194,7 @@ function updateTask(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Task not found');
+  if(rows[idx][8] !== userEmail) throw new Error('Access denied');
 
   const updated={
     id,
@@ -156,14 +204,15 @@ function updateTask(data){
     priority:(data.priority||rows[idx][4]||'Medium').toString(),
     status:(data.status||'Open').toString(),
     createdAt:rows[idx][6]||new Date().toISOString(),
-    updatedAt:new Date().toISOString()
+    updatedAt:new Date().toISOString(),
+    userEmail
   };
 
   sh.getRange(idx+1,1,1,TASK_COLUMNS.length)
     .setValues([TASK_COLUMNS.map(k=>updated[k]||'')]);
   return updated;
 }
-function toggleComplete(data){
+function toggleComplete(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,TASKS_SHEET,TASK_COLUMNS);
   const rows=sh.getDataRange().getValues();
@@ -171,17 +220,16 @@ function toggleComplete(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Task not found');
+  if(rows[idx][8] !== userEmail) throw new Error('Access denied');
 
   const completed=String(data.completed)==='true';
   rows[idx][5]=completed?'Done':'Open';
   rows[idx][7]=new Date().toISOString();
   sh.getRange(idx+1,1,1,TASK_COLUMNS.length).setValues([rows[idx]]);
-
-  const obj={};
-  TASK_COLUMNS.forEach((c,i)=>(obj[c]=rows[idx][i]));
+  const obj={}; TASK_COLUMNS.forEach((c,i)=>(obj[c]=rows[idx][i]));
   return obj;
 }
-function deleteTask(data){
+function deleteTask(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,TASKS_SHEET,TASK_COLUMNS);
   const rows=sh.getDataRange().getValues();
@@ -189,29 +237,30 @@ function deleteTask(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Task not found');
+  if(rows[idx][8] !== userEmail) throw new Error('Access denied');
   sh.deleteRow(idx+1);
   return {id};
 }
 
 /* ===== FCM ===== */
-function registerFcmToken(data){
+function registerFcmToken(data,userEmail){
   const token=(data.fcmToken||'').toString().trim();
   if(!token) return;
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,TOKENS_SHEET,TOKEN_COLUMNS);
   const values=sh.getDataRange().getValues();
-  const exists=values.some((r,i)=>i>0&&r[0]===token);
+  const exists=values.some((r,i)=>i>0&&r[0]===token && r[2]===userEmail);
   if(exists) return;
-  sh.appendRow([token,new Date().toISOString()]);
+  sh.appendRow([token,new Date().toISOString(),userEmail]);
 }
 
 /* ===== BILLS ===== */
-function listBills(){
+function listBills(userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,BILLS_SHEET,BILL_COLUMNS);
-  return sheetToObjects(sh);
+  return sheetToObjects(sh).filter(r=>r.userEmail===userEmail);
 }
-function addBill(data){
+function addBill(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,BILLS_SHEET,BILL_COLUMNS);
   const now=new Date().toISOString();
@@ -225,12 +274,12 @@ function addBill(data){
     lastMonthAmount:Number(data.lastMonthAmount||0),
     avgAmount:Number(data.amount||0),
     pctChange:0, spike:false, aiInsight:'',
-    updatedAt:now, createdAt:now
+    updatedAt:now, createdAt:now, userEmail
   };
   sh.appendRow(BILL_COLUMNS.map(k=>bill[k]||(k==='spike'?false:'')));
   return bill;
 }
-function updateBill(data){
+function updateBill(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,BILLS_SHEET,BILL_COLUMNS);
   const rows=sh.getDataRange().getValues();
@@ -238,6 +287,7 @@ function updateBill(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Bill not found');
+  if(rows[idx][13] !== userEmail) throw new Error('Access denied');
 
   const now=new Date().toISOString();
   rows[idx][1]=(data.name||rows[idx][1]||'').toString();
@@ -252,7 +302,7 @@ function updateBill(data){
   const obj={}; BILL_COLUMNS.forEach((c,i)=>(obj[c]=rows[idx][i]));
   return obj;
 }
-function deleteBill(data){
+function deleteBill(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,BILLS_SHEET,BILL_COLUMNS);
   const rows=sh.getDataRange().getValues();
@@ -260,10 +310,11 @@ function deleteBill(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Bill not found');
+  if(rows[idx][13] !== userEmail) throw new Error('Access denied');
   sh.deleteRow(idx+1);
   return {id};
 }
-function updateBillAmount(data){
+function updateBillAmount(data,userEmail){
   const ss=getSpreadsheet();
   const billsSh=getOrCreateSheet(ss,BILLS_SHEET,BILL_COLUMNS);
   const historySh=getOrCreateSheet(ss,BILL_HISTORY_SHEET,BILL_HISTORY_COLUMNS);
@@ -276,9 +327,10 @@ function updateBillAmount(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Bill not found');
+  if(rows[idx][13] !== userEmail) throw new Error('Access denied');
 
   const lastAmount=Number(rows[idx][3]||0);
-  const avg=computeBillAverage(historySh,id,newAmount);
+  const avg=computeBillAverage(historySh,id,userEmail,newAmount);
   const pctChange=lastAmount?((newAmount-lastAmount)/lastAmount)*100:0;
   const spike=newAmount>avg*1.25;
 
@@ -294,22 +346,22 @@ function updateBillAmount(data){
   rows[idx][11]=new Date().toISOString();
 
   billsSh.getRange(idx+1,1,1,BILL_COLUMNS.length).setValues([rows[idx]]);
-  historySh.appendRow([Utilities.getUuid(),id,newAmount,month||Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM'),new Date().toISOString()]);
+  historySh.appendRow([Utilities.getUuid(),id,newAmount,month||Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM'),new Date().toISOString(),userEmail]);
 
   const obj={}; BILL_COLUMNS.forEach((c,i)=>(obj[c]=rows[idx][i]));
   return obj;
 }
-function computeBillAverage(sh,billId,newAmount){
+function computeBillAverage(sh,billId,userEmail,newAmount){
   const values=sh.getDataRange().getValues();
-  const amounts=values.slice(1).filter(r=>r[1]===billId).map(r=>Number(r[2]||0));
+  const amounts=values.slice(1).filter(r=>r[1]===billId && r[5]===userEmail).map(r=>Number(r[2]||0));
   amounts.push(newAmount);
   if(!amounts.length) return newAmount;
   const sum=amounts.reduce((a,b)=>a+b,0);
   return sum/amounts.length;
 }
 
-/* ===== GROCERY LEGACY ===== */
-function addGroceryItem(data){
+/* ===== GROCERY ===== */
+function addGroceryItem(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,GROCERY_ITEMS_SHEET,GROCERY_ITEM_COLUMNS);
   const now=new Date().toISOString();
@@ -318,17 +370,18 @@ function addGroceryItem(data){
     item:(data.item||'').toString(),
     essential:String(data.essential)==='true',
     expectedPrice:Number(data.expectedPrice||0),
-    createdAt:now
+    createdAt:now,
+    userEmail
   };
   sh.appendRow(GROCERY_ITEM_COLUMNS.map(k=>item[k]||(k==='essential'?false:'')));
   return item;
 }
-function listGroceryItems(){
+function listGroceryItems(userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,GROCERY_ITEMS_SHEET,GROCERY_ITEM_COLUMNS);
-  return sheetToObjects(sh);
+  return sheetToObjects(sh).filter(r=>r.userEmail===userEmail);
 }
-function deleteGroceryItem(data){
+function deleteGroceryItem(data,userEmail){
   const ss=getSpreadsheet();
   const sh=getOrCreateSheet(ss,GROCERY_ITEMS_SHEET,GROCERY_ITEM_COLUMNS);
   const rows=sh.getDataRange().getValues();
@@ -336,23 +389,23 @@ function deleteGroceryItem(data){
   if(!id) throw new Error('Missing id');
   const idx=rows.findIndex((r,i)=>i>0&&r[0]===id);
   if(idx===-1) throw new Error('Item not found');
+  if(rows[idx][5] !== userEmail) throw new Error('Access denied');
   sh.deleteRow(idx+1);
   return {id};
 }
-function finalizeGrocery(data){
+function finalizeGrocery(data,userEmail){
   const ss=getSpreadsheet();
   const itemsSh=getOrCreateSheet(ss,GROCERY_ITEMS_SHEET,GROCERY_ITEM_COLUMNS);
   const summarySh=getOrCreateSheet(ss,GROCERY_SUMMARY_SHEET,GROCERY_SUMMARY_COLUMNS);
 
   const actualTotal=Number(data.actualTotal||0);
-  const items=sheetToObjects(itemsSh);
+  const items=sheetToObjects(itemsSh).filter(r=>r.userEmail===userEmail);
 
   const totalExpected=items.reduce((sum,i)=>sum+Number(i.expectedPrice||0),0);
   const difference=actualTotal-totalExpected;
   const overspendPercent=totalExpected?(difference/totalExpected)*100:0;
 
-  const totalNonEssential=items
-    .filter(i=>String(i.essential).toLowerCase()==='false')
+  const totalNonEssential=items.filter(i=>String(i.essential).toLowerCase()==='false')
     .reduce((sum,i)=>sum+Number(i.expectedPrice||0),0);
   const nonEssentialPercent=totalExpected?(totalNonEssential/totalExpected)*100:0;
 
@@ -364,15 +417,14 @@ function finalizeGrocery(data){
     overspendPercent:Number(overspendPercent.toFixed(2)),
     nonEssentialPercent:Number(nonEssentialPercent.toFixed(2)),
     aiInsight:'',
-    createdAt:new Date().toISOString()
+    createdAt:new Date().toISOString(),
+    userEmail
   };
 
   summarySh.appendRow(GROCERY_SUMMARY_COLUMNS.map(k=>row[k]||''));
   return row;
 }
-
-/* ===== GROCERY ANALYSIS (NEW) ===== */
-function saveGroceryAnalysis(data){
+function saveGroceryAnalysis(data,userEmail){
   data = data || {};
   const items = Array.isArray(data.items) ? data.items : [];
   if(!items.length) throw new Error('No items provided');
@@ -390,7 +442,8 @@ function saveGroceryAnalysis(data){
     avoidItems:JSON.stringify(data.avoidItems||[]),
     tips:JSON.stringify(data.tips||[]),
     summary:(data.summary||'').toString(),
-    createdAt:new Date().toISOString()
+    createdAt:new Date().toISOString(),
+    userEmail
   };
 
   sh.appendRow(GROCERY_ANALYSIS_COLUMNS.map(k=>row[k]!==undefined?row[k]:''));
@@ -399,14 +452,10 @@ function saveGroceryAnalysis(data){
 
 /* ===== GEMINI (Bills only) ===== */
 function callGemini(prompt){
-  if(!GEMINI_API_KEY || GEMINI_API_KEY==='YOUR_GEMINI_API_KEY') return '';
-  const payload={
-    contents:[{parts:[{text:prompt}]}],
-    generationConfig:{maxOutputTokens:180}
-  };
+  if(!GEMINI_API_KEY || GEMINI_API_KEY==='AIzaSyDptwaOATS-Be6VdRBTtJnMbdZgQDNA8UE') return '';
+  const payload={ contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:180} };
   const res=UrlFetchApp.fetch(`${GEMINI_MODEL}?key=${GEMINI_API_KEY}`,{
-    method:'post',contentType:'application/json',
-    payload:JSON.stringify(payload),muteHttpExceptions:true
+    method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true
   });
   const json=JSON.parse(res.getContentText()||'{}');
   return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'';

@@ -5,49 +5,42 @@
 <title>Sign in • AI Task Manager</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#0b0f14"/>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://accounts.google.com/gsi/client" defer></script>
 <script src="./config.js"></script>
 <style>
 :root{
-  --bg:#0b0f14; --card:#12171d; --elevate:#1a212a; --text:#e9eef6; --muted:#aab6c5;
-  --accent:#45a1ff; --border:#26313f; --shadow:0 14px 40px rgba(0,0,0,.45);
-  --radius:18px;
+  --bg:#0b0f14; --card:#12171d; --text:#e9eef6; --muted:#aab6c5; --accent:#45a1ff; --border:#26313f;
+  --shadow:0 14px 40px rgba(0,0,0,.45); --radius:18px;
 }
 *{box-sizing:border-box;}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-  font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,Arial;}
 body{-webkit-font-smoothing:antialiased;}
 .page{
-  min-height:100dvh; display:grid; place-items:center; padding:20px;
+  min-height:100dvh; display:grid; place-items:center; padding:16px;
   background:
     radial-gradient(600px 300px at 20% -10%, rgba(69,161,255,.25), transparent 60%),
     radial-gradient(600px 300px at 80% 110%, rgba(81,208,125,.18), transparent 60%),
     var(--bg);
 }
 .card{
-  width:min(420px, 95vw);
+  width:min(420px, 94vw);
   border:1px solid var(--border);
   border-radius:var(--radius);
   background:linear-gradient(180deg,#1a212a,#0e1217);
   box-shadow:var(--shadow);
-  padding:26px;
-  display:grid; gap:16px; text-align:center;
-}
-.brand{
-  display:grid; place-items:center; gap:10px;
+  padding:22px;
+  display:grid; gap:14px; text-align:center;
 }
 .logo{
-  width:64px; height:64px; border-radius:18px;
-  display:grid; place-items:center;
+  width:60px; height:60px; border-radius:16px;
+  display:grid; place-items:center; margin:0 auto;
   background:linear-gradient(135deg,var(--accent),#9ad2ff);
-  color:#06101a; font-weight:900; font-size:24px;
+  color:#06101a; font-weight:900; font-size:22px;
   box-shadow:0 10px 24px rgba(69,161,255,.35);
 }
-h1{margin:0; font-size:20px; letter-spacing:.2px;}
-p{margin:0; color:var(--muted); font-size:13px; line-height:1.5;}
-.divider{
-  height:1px; background:var(--border); margin:2px 0;
-}
+h1{margin:0;font-size:18px;}
+p{margin:0;color:var(--muted);font-size:13px;line-height:1.5;}
+.divider{height:1px;background:var(--border);margin:2px 0;}
 .note{
   display:flex; gap:8px; align-items:flex-start;
   background:#121821; border:1px solid var(--border);
@@ -56,50 +49,90 @@ p{margin:0; color:var(--muted); font-size:13px; line-height:1.5;}
 .note span{font-size:14px;}
 .google-wrap{
   display:grid; gap:10px; justify-items:center;
+  width:100%;
 }
-.footer{
-  font-size:11px; color:var(--muted);
+#googleSignIn{
+  width:100%;
+  display:flex;
+  justify-content:center;
+}
+.loading-btn{
+  width:100%;
+  border:1px solid var(--border);
+  background:#121821;
+  color:var(--muted);
+  border-radius:12px;
+  padding:12px 14px;
+  font-size:13px;
+}
+.footer{font-size:11px;color:var(--muted);}
+@media (max-width:420px){
+  .card{padding:18px;}
+  h1{font-size:17px;}
 }
 </style>
 </head>
 <body>
   <div class="page">
     <div class="card">
-      <div class="brand">
-        <div class="logo">AI</div>
-        <h1>Welcome to Task Manager</h1>
-        <p>Sign in with Google to access your personal tasks, bills, and grocery analysis.</p>
-      </div>
+      <div class="logo">AI</div>
+      <h1>Welcome to Task Manager</h1>
+      <p>Sign in with Google to access your personal tasks, bills, and grocery analysis.</p>
 
       <div class="divider"></div>
 
       <div class="google-wrap">
-        <div id="googleSignIn"></div>
+        <div id="googleSignIn">
+          <div class="loading-btn" id="loadingBtn">Loading sign‑in…</div>
+        </div>
         <div class="note">
           <span>🔒</span>
           <div>Your data stays private and is tied to your Google account.</div>
         </div>
       </div>
 
-      <div class="footer">By continuing you agree to use this app responsibly.</div>
+     
     </div>
   </div>
 
 <script>
-const CLIENT_ID = window.APP_CONFIG.GOOGLE_CLIENT_ID;
+function renderGoogleButton(){
+  const CLIENT_ID = window.APP_CONFIG.GOOGLE_CLIENT_ID;
+  if(!window.google || !google.accounts || !google.accounts.id) return false;
 
-function handleCredential(response){
-  localStorage.setItem('idToken', response.credential);
-  window.location.href = './home.html';
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: (response) => {
+      localStorage.setItem('idToken', response.credential);
+      window.location.href = './home.html';
+    }
+  });
+
+  const container = document.getElementById('googleSignIn');
+  container.innerHTML = '';
+  google.accounts.id.renderButton(container, {
+    theme: 'outline',
+    size: 'large',
+    shape: 'pill',
+    text: 'continue_with',
+    width: Math.min(280, Math.floor(container.clientWidth * 0.9))
+  });
+  return true;
 }
-function initAuth(){
-  google.accounts.id.initialize({ client_id: CLIENT_ID, callback: handleCredential });
-  google.accounts.id.renderButton(
-    document.getElementById('googleSignIn'),
-    { theme: 'outline', size: 'large', shape: 'pill', text: 'continue_with', width: 260 }
-  );
+
+function waitForGoogle(){
+  let tries = 0;
+  const timer = setInterval(() => {
+    tries++;
+    if(renderGoogleButton() || tries > 50){
+      clearInterval(timer);
+      const loading = document.getElementById('loadingBtn');
+      if(loading && !window.google) loading.textContent = 'Unable to load Google Sign‑In';
+    }
+  }, 100);
 }
-document.addEventListener('DOMContentLoaded', initAuth);
+
+document.addEventListener('DOMContentLoaded', waitForGoogle);
 </script>
 </body>
 </html>
