@@ -45,6 +45,7 @@ h1{margin:0;font-size:17px;font-weight:700;}
 .badge{font-size:11px;border:1px solid var(--border);padding:4px 8px;border-radius:999px;background:#182028;}
 .badge.medium{background:linear-gradient(135deg,var(--medium),#a4f0c5);color:#0f2016;border:none;}
 .btn{appearance:none;border:0;border-radius:12px;padding:12px 14px;font-weight:700;background:linear-gradient(135deg,var(--accent),#9ad2ff);color:#06101a;cursor:pointer;}
+.btn.secondary{background:linear-gradient(135deg,#7b61ff,#b5a7ff);color:#0a061a;}
 input[type=number],textarea{
   width:100%;background:#1c2530;border:1px solid var(--border);
   border-radius:10px;padding:12px;color:var(--text);outline:none;
@@ -70,6 +71,14 @@ label{font-size:12px;color:var(--muted);}
 .modal-body{padding:12px 14px;display:grid;gap:10px;}
 .modal-actions{padding:10px 14px 14px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);}
 .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
+
+.history-list{display:grid;gap:10px;}
+.history-item{
+  border:1px solid var(--border);border-radius:12px;padding:10px;
+  background:linear-gradient(180deg,#121820,#0f141a);
+  font-size:12px;color:var(--muted);
+}
+.history-item strong{color:var(--text);font-size:13px;}
 
 @media (max-width:420px){ .item{grid-template-columns:1fr;} }
 @media (min-width:768px){
@@ -101,6 +110,8 @@ label{font-size:12px;color:var(--muted);}
       <div id="items"></div>
       <div><label>Enter Final Bill Amount (₹)</label><input type="number" id="finalAmount" step="0.01"></div>
       <button class="btn" id="analyzeBtn">Analyze Spending</button>
+      <button class="btn secondary" id="aiAnalyzeBtn">AI Analysis</button>
+      <button class="btn ghost" id="historyBtn">View History</button>
     </section>
 
     <section class="card list-card" id="analysisCard" style="display:none;">
@@ -132,6 +143,20 @@ label{font-size:12px;color:var(--muted);}
   </div>
 </div>
 
+<div class="modal-wrap" id="modalHistory">
+  <div class="modal-overlay" data-close="modalHistory"></div>
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Analysis History</h3></div>
+    <div class="modal-body">
+      <div id="historyList" class="history-list"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="modalHistory">Close</button>
+      <button class="btn danger" id="clearHistoryBtn">Clear</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const WEB_APP_URL = window.APP_CONFIG.WEB_APP_URL;
 let idToken = localStorage.getItem('idToken') || '';
@@ -155,6 +180,8 @@ const groceryPrices = {
 const nonEssential = ["Chips","Soft Drink 2L","Chocolate","Biscuits"];
 const qs=s=>document.querySelector(s);
 let ITEMS=[];
+
+const HISTORY_KEY = 'groceryAnalysisHistory';
 
 function safeFetch(body){ return fetch(WEB_APP_URL,{ method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(body) }); }
 function ensureJson(r){ return r.json().catch(()=>({ok:false,error:'Bad JSON'})); }
@@ -272,6 +299,43 @@ async function saveAnalysis(result){
   };
   await apiRequest('saveGroceryAnalysis', payload);
 }
+
+function saveHistoryLocal(result){
+  const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  history.unshift({
+    date: new Date().toISOString(),
+    estimatedTotal: result.estimatedTotal,
+    finalAmount: Number(qs('#finalAmount').value.trim()),
+    difference: result.difference,
+    summary: result.summary,
+    avoidItems: result.avoidItems || []
+  });
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 25)));
+}
+
+function renderHistory(){
+  const list = qs('#historyList');
+  const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  list.innerHTML = '';
+  if(!history.length){
+    list.innerHTML = '<div class="history-item">No analysis history yet.</div>';
+    return;
+  }
+  history.forEach(h=>{
+    const d = new Date(h.date);
+    const pad = n => String(n).padStart(2,'0');
+    const displayDate = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <strong>${displayDate}</strong><br>
+      Estimated: ₹${h.estimatedTotal} | Actual: ₹${h.finalAmount} | Diff: ₹${h.difference}<br>
+      ${h.summary}
+    `;
+    list.appendChild(item);
+  });
+}
+
 async function analyzeSpending(){
   if(!ITEMS.length){ alert('Please add list first.'); return; }
   if(!qs('#finalAmount').value.trim()){ alert('Enter final bill amount.'); return; }
@@ -282,14 +346,54 @@ async function analyzeSpending(){
   qs('#avoidItems').textContent=result.avoidItems.length?result.avoidItems.join(', '):'None';
   qs('#budgetTips').textContent=result.tips.join(' | ');
   qs('#summaryText').textContent=result.summary;
+
+  saveHistoryLocal(result);
   await saveAnalysis(result);
 }
+
+async function analyzeWithAI(){
+  if(!ITEMS.length){ alert('Please add list first.'); return; }
+  if(!qs('#finalAmount').value.trim()){ alert('Enter final bill amount.'); return; }
+
+  const localResult = analyzeLocal();
+  const r = await apiRequest('analyzeGroceryAI',{
+    items: ITEMS,
+    finalAmount: Number(qs('#finalAmount').value.trim()),
+    estimatedTotal: localResult.estimatedTotal,
+    difference: localResult.difference
+  });
+
+  const ai = r.ok && r.data ? r.data : null;
+  const result = {
+    estimatedTotal: localResult.estimatedTotal,
+    difference: localResult.difference,
+    avoidItems: ai?.avoidItems || localResult.avoidItems,
+    tips: ai?.tips || localResult.tips,
+    summary: ai?.summary || localResult.summary
+  };
+
+  qs('#analysisCard').style.display='block';
+  qs('#estTotal').textContent=result.estimatedTotal;
+  qs('#diffTotal').textContent=result.difference;
+  qs('#avoidItems').textContent=result.avoidItems.length?result.avoidItems.join(', '):'None';
+  qs('#budgetTips').textContent=result.tips.join(' | ');
+  qs('#summaryText').textContent=result.summary;
+
+  saveHistoryLocal(result);
+  await saveAnalysis(result);
+}
+
 function openModal(id){ const w=qs('#'+id); if(!w) return; w.classList.add('open'); }
 function closeModal(id){ const w=qs('#'+id); if(!w) return; w.classList.remove('open'); }
 
 function init(){
   qs('#addListBtn').addEventListener('click',addList);
   qs('#analyzeBtn').addEventListener('click',analyzeSpending);
+  qs('#aiAnalyzeBtn').addEventListener('click',analyzeWithAI);
+
+  qs('#historyBtn').addEventListener('click',()=>{ renderHistory(); openModal('modalHistory'); });
+  qs('#clearHistoryBtn').addEventListener('click',()=>{ localStorage.removeItem(HISTORY_KEY); renderHistory(); });
+
   qs('#refreshBtn').addEventListener('click',()=>{ qs('#groceryNotepad').value=''; qs('#finalAmount').value=''; ITEMS=[]; renderItems(); });
 
   qs('#fabMenu').addEventListener('click',()=>openModal('modalOptions'));
