@@ -71,6 +71,7 @@ h1{margin:0;font-size:17px;font-weight:700;}
 .btn{appearance:none;border:0;border-radius:12px;padding:10px 12px;font-weight:700;background:linear-gradient(135deg,var(--accent),#9ad2ff);color:#06101a;cursor:pointer;}
 .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
 .btn.danger{background:linear-gradient(135deg,var(--urgent),#ff8a8e);color:#330c0d;}
+.btn.secondary{background:linear-gradient(135deg,#7b61ff,#b5a7ff);color:#0a061a;}
 input[type=text],input[type=number],input[type=date]{width:100%;background:#1c2530;border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);outline:none;font-size:13px;}
 label{font-size:11px;color:var(--muted);}
 @media (max-width:420px){ .bill{grid-template-columns:1fr;} }
@@ -96,6 +97,7 @@ label{font-size:11px;color:var(--muted);}
 
   <div class="content">
     <section class="card list-card">
+      <button class="btn secondary" id="cashFlowBtn">AI Cash Flow Forecaster</button>
       <div class="loading" id="loadingBills">Loading bills…</div>
       <div class="empty" id="emptyBills" style="display:none;">No bills yet.</div>
       <div id="bills"></div>
@@ -168,6 +170,19 @@ label{font-size:11px;color:var(--muted);}
     </div>
     <div class="modal-actions">
       <button class="btn ghost" data-close="modalOptions">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="modalCashFlow">
+  <div class="modal-overlay" data-close="modalCashFlow"></div>
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">AI Cash Flow Forecaster</h3></div>
+    <div class="modal-body">
+      <div id="cashFlowText">Loading…</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" data-close="modalCashFlow">Close</button>
     </div>
   </div>
 </div>
@@ -279,6 +294,16 @@ async function confirmDeleteBill(){
   else alert(r.error||'Error');
 }
 
+async function cashFlowForecast(){
+  const r = await apiRequest('cashFlowForecast');
+  if(r.ok && r.data && r.data.message){
+    qs('#cashFlowText').textContent = r.data.message;
+  }else{
+    qs('#cashFlowText').textContent = r.error || 'Unable to generate forecast.';
+  }
+  openModal('modalCashFlow');
+}
+
 function openModal(id){ const w=qs('#'+id); if(!w) return; w.classList.add('open'); }
 function closeModal(id){ const w=qs('#'+id); if(!w) return; w.classList.remove('open'); }
 async function refreshBills(){ qs('#loadingBills').style.display='block'; const r=await apiRequest('listBills'); if(r.ok){ BILLS=r.data||[]; renderBills(); } else alert(r.error||'Error'); }
@@ -289,6 +314,7 @@ function init(){
   qs('#saveBillBtn').addEventListener('click',saveEditBill);
   qs('#deleteBillBtn').addEventListener('click',confirmDeleteBill);
   qs('#refreshBtn').addEventListener('click',refreshBills);
+  qs('#cashFlowBtn').addEventListener('click',cashFlowForecast);
 
   qs('#fabMenu').addEventListener('click',()=>openModal('modalOptions'));
   qs('#optionTasksBtn').addEventListener('click',()=>window.location.href='./home.html');
